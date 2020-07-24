@@ -1,0 +1,25 @@
+# data files
+*.json
+
+# binary files
+*.bin
+bin/*
+
+# video files
+*.mp4
+*.avi
+*.jpg
+*.png
+
+# windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# log
+*.log
+log/*
+
+# c/c++ made files
+main
+draw
