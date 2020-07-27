@@ -6,11 +6,11 @@
 
 // 定义欧式距离公式，返回值默认double类型。
 #define Eclidian(x, y) sqrt((double)((x) * (x) + (y) * (y)))
-#define L1_norm(x, y) ((x)>(y)?((x)-(y)):((y)-(x)))
+#define L1_norm(x, y) ((x) > (y) ? ((x) - (y)) : ((y) - (x)))
 
 // 读取二进制数据的函数
 int readData(short int *data, FILE *fp);
-void StatusBar(int count_frame);
+void StatusBar(int count_frame, int timeuse);
 
 int readData(short int *data, FILE *fp)
 {
@@ -27,14 +27,15 @@ int readData(short int *data, FILE *fp)
     return flag;
 }
 
-void StatusBar(int count_frame)
+void StatusBar(int count_frame, int timeuse)
 {
     if (!(count_frame % PRINT_INTERVAL))
     {
-        printf("Processing %5.2f\%, %4d/%4d [", (100 * (float)count_frame / TOTAL_NUM_FRAME), count_frame, TOTAL_NUM_FRAME);
+        printf("Processing %5.2f\%, %4d/%4d at %dfps[",
+               (100 * (float)count_frame / TOTAL_NUM_FRAME), count_frame, TOTAL_NUM_FRAME, 1000 / (timeuse >> 10));
         for (int _t = 0; _t++ < (40 * (float)count_frame / TOTAL_NUM_FRAME); printf("="));
         printf(">");
-        for (int _t = 0; _t++ < 40 - (40 * (float)count_frame / TOTAL_NUM_FRAME); printf(" "));
+        for (int _t = 0; _t++ < 39 - (40 * (float)count_frame / TOTAL_NUM_FRAME); printf(" "));
         printf("]\n");
     }
 }

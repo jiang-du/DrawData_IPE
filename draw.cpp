@@ -2,6 +2,7 @@
 #include "opencv2/imgproc.hpp"
 #include "opencv2/highgui.hpp"
 #include "opencv2/videoio.hpp"
+#include <sys/time.h>
 
 #include "config.h"
 #include "draw.h"
@@ -23,6 +24,8 @@ int main()
     if (capture.isOpened())
     {
         int count_frame = 0;
+        int timeuse = -1;
+        struct timeval start, end;
         while (1)
         {
             capture >> image;
@@ -37,13 +40,14 @@ int main()
             for (int i = 0; i < 5; i++)
             {
                 short *pdata = data + i * 4;
-
+                // 计时器开始
+                gettimeofday(&start, NULL);
 #if (DISP_METHOD == 1)
                 // Method 1: 直接显示框
                 // 定义矩形框
                 cv::Rect rect(*pdata, *(pdata + 1), *(pdata + 2) - *pdata, *(pdata + 3) - *(pdata + 1));
                 // 绘制框
-                v::rectangle(image, rect, cv::Scalar(64 + i * 48, 128 + i * 32, 192 - i * 48, (double)0.5), 5, 8, 0);
+                cv::rectangle(image, rect, cv::Scalar(64 + i * 48, 128 + i * 32, 192 - i * 48, (double)0.5), 5, 8, 0);
                 // image.at<u_char>(0,0,0) = 1;
 #else
 #if (DISP_METHOD == 2)
@@ -114,6 +118,7 @@ int main()
                 {
                     printf("Warning: You are using a slow algorithm.\n");
                     // 传统方法：遍历所有像素，并设置像素值
+                    // 时间：快速算法约18ms一张图，传统方法大约63ms
                     for (int xi = 0; xi < image.rows;)
                     {
                         //获取第i行首像素指针
@@ -130,13 +135,19 @@ int main()
                         }
                     }
                 }
+                gettimeofday(&end, NULL);
+                timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
                 break;
 #endif
 #endif
 #endif
+                // 计时器结束
+                gettimeofday(&end, NULL);
+                timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+                timeuse = MAX(timeuse, 1);
             }
 #if (!SAVE_VIDEO) or DISPLAY_VIDEO
-// 只有在不保存视频的情况下才判断是否显示视频，否则强制显示
+            // 只有在不保存视频的情况下才判断是否显示视频，否则强制显示
             imshow(WINDOW_TITLE, image);
 #endif
 #if SAVE_VIDEO
@@ -150,7 +161,7 @@ int main()
             }
 #endif
             // 打印状态信息
-            StatusBar(count_frame++);
+            StatusBar(count_frame++, timeuse);
         }
     }
     return 0;
