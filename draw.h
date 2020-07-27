@@ -1,22 +1,16 @@
 #ifndef DRAW_H
 #define DRAW_H
 
-// 是否保存视频文件输出
-#define SAVEVIDEO 1 // 设置成0就不保存，默认为1
-#define TOTAL_NUM_FRAME 1097
-#define DISP_METHOD 3
-// 设置文件路径
-#define FILENAME "RawData.bin"
-#define VIDEONAME "./../datasets/ori.avi"
-
 #include <stdio.h>
 #include <math.h>
 
 // 定义欧式距离公式，返回值默认double类型。
 #define Eclidian(x, y) sqrt((double)((x) * (x) + (y) * (y)))
+#define L1_norm(x, y) ((x)>(y)?((x)-(y)):((y)-(x)))
 
 // 读取二进制数据的函数
 int readData(short int *data, FILE *fp);
+void StatusBar(int count_frame);
 
 int readData(short int *data, FILE *fp)
 {
@@ -31,6 +25,18 @@ int readData(short int *data, FILE *fp)
     }
 
     return flag;
+}
+
+void StatusBar(int count_frame)
+{
+    if (!(count_frame % PRINT_INTERVAL))
+    {
+        printf("Processing %5.2f\%, %4d/%4d [", (100 * (float)count_frame / TOTAL_NUM_FRAME), count_frame, TOTAL_NUM_FRAME);
+        for (int _t = 0; _t++ < (40 * (float)count_frame / TOTAL_NUM_FRAME); printf("="));
+        printf(">");
+        for (int _t = 0; _t++ < 40 - (40 * (float)count_frame / TOTAL_NUM_FRAME); printf(" "));
+        printf("]\n");
+    }
 }
 
 #endif
