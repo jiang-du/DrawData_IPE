@@ -12,9 +12,58 @@ int main()
     const char *filename = FILENAME;
     const char *videoname = VIDEONAME;
     FILE *fp = fopen(filename, "rb");
-    short int data[20];
+    short int *data;
+    short int database[TOTAL_NUM_FRAME][20];
+    struct timeval start, end;
+    int timeuse = -1;
+    // 计时器开始
+    gettimeofday(&start, NULL);
+    // 预读取所有数据
+    for (int i = 0; i < TOTAL_NUM_FRAME;)
+        readData(database[i++], fp);
+    // 计时器暂停
+    gettimeofday(&end, NULL);
+    timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+    printf("Data read at %d us.\n", timeuse);
+
+#if (DISP_METHOD == 3)
+    // 求解圆的中心点和半径
+    short int cicle_center[TOTAL_NUM_FRAME][2];
+    short cicle_radius[TOTAL_NUM_FRAME];
+    // 计时器开始
+    gettimeofday(&start, NULL);
+    for (int i = 0; i < TOTAL_NUM_FRAME;)
+    {
+        // 取第3个演员的坐标
+        short *pdata = database[i] + 3;
+        // 获取框的中心点；使用移位运算极限加速
+        cicle_center[i][0] = (*pdata + *(pdata + 2)) >> 1;       //x
+        cicle_center[i][1] = (*(pdata + 1) + *(pdata + 3)) >> 1; //y
+        // 获取圆的半径，并量化为整数
+        cicle_radius[i++] = (short)Eclidian(*(pdata + 2) - *pdata, *(pdata + 3) - *(pdata + 1)) >> 1;
+    }
+    // 计时器暂停
+    gettimeofday(&end, NULL);
+    timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+    printf("Calculate radius at %d us.\n", timeuse);
+
+    // 平滑操作
+    for (short i = 0; ++i < TOTAL_NUM_FRAME;)
+    {
+        short difference = 30;
+        if (L1_norm(cicle_radius[i], cicle_radius[i - 1]) > difference)
+            cicle_radius[i] = cicle_radius[i-1] + (cicle_radius[i] > cicle_radius[i - 1]) ? difference : (-difference);
+        difference = 80;
+        if (L1_norm(cicle_center[i][0], cicle_center[i - 1][0]) > difference)
+            cicle_center[i][0] = cicle_center[i-1][0] + (cicle_center[i][0] > cicle_center[i - 1][0]) ? difference : (0-difference);
+        if (L1_norm(cicle_center[i][1], cicle_center[i - 1][1]) > difference)
+            cicle_center[i][1] = cicle_center[i-1][1] + (cicle_center[i][1] > cicle_center[i - 1][1]) ? difference : (0-difference);
+    }
+#endif
     cv::Mat image;
     cv::VideoCapture capture;
+
+    // 打开视频文件
     capture.open(videoname);
 #if SAVE_VIDEO
     double fps = 25;
@@ -23,13 +72,11 @@ int main()
 #endif
     if (capture.isOpened())
     {
-        int count_frame = 0;
-        int timeuse = -1;
-        struct timeval start, end;
-        while (1)
+        for (int count_frame = 0; count_frame < TOTAL_NUM_FRAME;)
         {
             capture >> image;
-            readData(data, fp);
+            // 导入当前的坐标
+            data = database[count_frame];
             // 读到的坐标是(x1,y1,x2,y2)格式
             if (image.empty())
             {
@@ -65,11 +112,6 @@ int main()
                 if ((i - 3) != 0)
                     // 选择需要关注的person ID
                     continue;
-                // 获取框的中心点
-                short cx = (*pdata + *(pdata + 2)) / 2;
-                short cy = (*(pdata + 1) + *(pdata + 3)) / 2;
-                // 获取圆的半径
-                double radius = 0.5 * Eclidian(*(pdata + 2) - *pdata, *(pdata + 3) - *(pdata + 1));
                 // 对图像进行逐像素处理
                 if (image.isContinuous())
                 {
@@ -77,23 +119,23 @@ int main()
                     // 其实不连续也可以用copy()函数，但是这样做没啥实际意义
 
                     // 将半径转成整数，加速计算
-                    int _radius = (int)radius;
+                    short _radius = cicle_radius[count_frame];
 
                     // int numberOfPixels = image.rows * image.cols * image.channels();
                     uchar *img_ptr = reinterpret_cast<uchar *>(image.data);
                     // 使用register变量，极限加速
-                    for (register int xi = 0; xi < image.rows; xi++)
+                    for (register short xi = 0; xi < image.rows; xi++)
                     {
-                        if (L1_norm(xi, cy) < _radius)
+                        if (L1_norm(xi, cicle_center[count_frame][0]) < cicle_radius[count_frame])
                         {
-                            for (register int yi = 0; yi < image.cols; yi++)
+                            for (register short yi = 0; yi < image.cols; yi++)
                             {
                                 // 判断是否在圆的外切矩形框内
-                                if (L1_norm(yi, cx) < _radius)
+                                if (L1_norm(yi, cicle_center[count_frame][1]) < cicle_radius[count_frame])
                                 {
                                     // 设置倍率
-                                    float dist = Eclidian(xi - cy, yi - cx);
-                                    float rate = MIN(3.5 - 3 * MIN(dist / radius, 1), 1);
+                                    float dist = Eclidian(xi - cicle_center[count_frame][0], yi - cicle_center[count_frame][1]);
+                                    float rate = MIN(3.5 - 3 * MIN(dist / cicle_radius[count_frame], 1), 1);
                                     // 对3个channel写入内存地址
                                     for (register uchar _c = 0; _c++ < 3;)
                                         // 赋值运算右边执行之后左边的++返回的是加之前的结果
@@ -126,8 +168,8 @@ int main()
                         for (int yi = 0; yi < image.cols; ++yi)
                         {
                             // 设置倍率
-                            float dist = Eclidian(xi - cy, yi - cx);
-                            float rate = MIN(3.5 - 3 * MIN(dist / radius, 1), 1);
+                            float dist = Eclidian(xi - cicle_center[count_frame][0], yi - cicle_center[count_frame][0]);
+                            float rate = MIN(3.5 - 3 * MIN(dist / cicle_radius[count_frame], 1), 1);
                             // 对内存地址的数据直接进行修改
                             for (int _channel = 0; _channel < 3; ++_channel)
                                 // BGR
@@ -137,6 +179,8 @@ int main()
                 }
                 gettimeofday(&end, NULL);
                 timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+                // 给出了时间开销下限，防止计算用时除以0报错浮点数例外
+                timeuse = MAX(timeuse, 1 >> 10);
                 break;
 #endif
 #endif
@@ -144,7 +188,9 @@ int main()
                 // 计时器结束
                 gettimeofday(&end, NULL);
                 timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
-                timeuse = MAX(timeuse, 1);
+                // 给出了时间开销下限，防止计算用时除以0报错浮点数例外
+                timeuse = MAX(timeuse, 1025);
+                //timeuse = MAX(timeuse, 1);
             }
 #if (!SAVE_VIDEO) or DISPLAY_VIDEO
             // 只有在不保存视频的情况下才判断是否显示视频，否则强制显示

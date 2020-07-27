@@ -22,6 +22,8 @@ int readData(short int *data, FILE *fp)
     else
     {
         printf("Warning: No more data.\n");
+        // 没有数据的话，用前一帧的数据来填充
+        memcpy(data, data - 20, 20 * sizeof(short int));
     }
 
     return flag;
@@ -33,9 +35,11 @@ void StatusBar(int count_frame, int timeuse)
     {
         printf("Processing %5.2f\%, %4d/%4d at %dfps[",
                (100 * (float)count_frame / TOTAL_NUM_FRAME), count_frame, TOTAL_NUM_FRAME, 1000 / (timeuse >> 10));
-        for (int _t = 0; _t++ < (40 * (float)count_frame / TOTAL_NUM_FRAME); printf("="));
+        for (int _t = 0; _t++ < (40 * (float)count_frame / TOTAL_NUM_FRAME);)
+            printf("=");
         printf(">");
-        for (int _t = 0; _t++ < 39 - (40 * (float)count_frame / TOTAL_NUM_FRAME); printf(" "));
+        for (int _t = 0; _t++ < 39 - (40 * (float)count_frame / TOTAL_NUM_FRAME);)
+            printf(" ");
         printf("]\n");
     }
 }

@@ -5,7 +5,7 @@
 #define SAVE_VIDEO 1 // 设置成0就不保存，默认为1
 #if SAVE_VIDEO
 // 只有在保存视频的情况下才允许设置是否显示视频
-#define DISPLAY_VIDEO 0 // 设置成0就不显示，默认为1
+#define DISPLAY_VIDEO 1 // 设置成0就不显示，默认为1
 #endif
 #define TOTAL_NUM_FRAME 1097
 #define DISP_METHOD 3
