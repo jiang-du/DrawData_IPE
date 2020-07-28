@@ -9,6 +9,8 @@
 #endif
 #define TOTAL_NUM_FRAME 1097
 #define DISP_METHOD 3
+// 是否显示左上角的frame编号
+#define FRAME_NUM_DISP 1
 // 设置多少个frame打印一次
 #define PRINT_INTERVAL 30
 // 编码格式选择X264更有利于视频质量好，但是速度慢一些

@@ -34,7 +34,7 @@ void StatusBar(int count_frame, int timeuse)
     if (!(count_frame % PRINT_INTERVAL))
     {
         printf("Processing %5.2f\%, %4d/%4d at %dfps[",
-               (100 * (float)count_frame / TOTAL_NUM_FRAME), count_frame, TOTAL_NUM_FRAME, 1000 / (timeuse >> 10));
+               (100 * (float)count_frame / TOTAL_NUM_FRAME), count_frame, TOTAL_NUM_FRAME, 1000000 * count_frame / timeuse);
         for (int _t = 0; _t++ < (40 * (float)count_frame / TOTAL_NUM_FRAME);)
             printf("=");
         printf(">");

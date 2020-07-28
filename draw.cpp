@@ -9,6 +9,7 @@
 
 int main()
 {
+    // ------ 变量初始化 ------
     const char *filename = FILENAME;
     const char *videoname = VIDEONAME;
     FILE *fp = fopen(filename, "rb");
@@ -16,6 +17,8 @@ int main()
     short int database[TOTAL_NUM_FRAME][20];
     struct timeval start, end;
     int timeuse = -1;
+
+    // ------ 读数据 ------
     // 计时器开始
     gettimeofday(&start, NULL);
     // 预读取所有数据
@@ -27,7 +30,7 @@ int main()
     printf("Data read at %d us.\n", timeuse);
 
 #if (DISP_METHOD == 3)
-    // 求解圆的中心点和半径
+    // ------ 求解圆的中心点和半径 ------
     short int cicle_center[TOTAL_NUM_FRAME][2];
     short cicle_radius[TOTAL_NUM_FRAME];
     // 计时器开始
@@ -47,31 +50,57 @@ int main()
     timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
     printf("Calculate radius at %d us.\n", timeuse);
 
-    // 平滑操作
+    // ------ 平滑操作 ------
+    // 计时器开始
+    gettimeofday(&start, NULL);
     for (short i = 0; ++i < TOTAL_NUM_FRAME;)
     {
-        short difference = 30;
-        if (L1_norm(cicle_radius[i], cicle_radius[i - 1]) > difference)
-            cicle_radius[i] = cicle_radius[i-1] + (cicle_radius[i] > cicle_radius[i - 1]) ? difference : (-difference);
-        difference = 80;
+        // 对半径的容差，注意变大和变小是分别处理的
+        short _diff = cicle_radius[i] - cicle_radius[i - 1];
+        // 半径最多增加多少
+        short difference = cicle_radius[i - 1] >> 4; // 最多允许比上一帧增加1/16
+        if (_diff > difference)
+            cicle_radius[i] = cicle_radius[i - 1] + difference;
+        else
+        {
+            // 半径最多减少多少(注意要用负的)
+            difference = -(cicle_radius[i - 1] >> 5); // 最多允许比上一帧减少1/32
+            if (_diff < difference)
+                cicle_radius[i] = cicle_radius[i - 1] + difference;
+        }
+        // 对圆心位置的容差
+        // 竖直方向平移量
+        difference = 3;
         if (L1_norm(cicle_center[i][0], cicle_center[i - 1][0]) > difference)
-            cicle_center[i][0] = cicle_center[i-1][0] + (cicle_center[i][0] > cicle_center[i - 1][0]) ? difference : (0-difference);
+            cicle_center[i][0] = cicle_center[i - 1][0] + ((cicle_center[i][0] > cicle_center[i - 1][0]) ? difference : (0 - difference));
+        // 水平方向平移量，因为体操运动员运动速度快所以应该设置大一点
+        difference = 20;
         if (L1_norm(cicle_center[i][1], cicle_center[i - 1][1]) > difference)
-            cicle_center[i][1] = cicle_center[i-1][1] + (cicle_center[i][1] > cicle_center[i - 1][1]) ? difference : (0-difference);
+            cicle_center[i][1] = cicle_center[i - 1][1] + ((cicle_center[i][1] > cicle_center[i - 1][1]) ? difference : (0 - difference));
     }
+    // 计时器暂停
+    gettimeofday(&end, NULL);
+    timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+    printf("Smooth at %d us.\n", timeuse);
 #endif
+
     cv::Mat image;
     cv::VideoCapture capture;
 
-    // 打开视频文件
+    // ------ 打开视频文件 ------
     capture.open(videoname);
 #if SAVE_VIDEO
-    double fps = 25;
-    cv::Size videoSize(1920, 1080);
+    // 从原视频直接获取fps
+    double fps = capture.get(cv::CAP_PROP_FPS);
+    // 保持视频尺寸(1920*1080)
+    cv::Size videoSize(capture.get(cv::CAP_PROP_FRAME_WIDTH), capture.get(cv::CAP_PROP_FRAME_HEIGHT));
+    // 创建写入视频文件
     cv::VideoWriter writer("output.mp4", cv::VideoWriter::fourcc(FOUR_CC), fps, videoSize);
 #endif
     if (capture.isOpened())
     {
+        // 计时器开始
+        gettimeofday(&start, NULL);
         for (int count_frame = 0; count_frame < TOTAL_NUM_FRAME;)
         {
             capture >> image;
@@ -86,11 +115,9 @@ int main()
             }
             for (int i = 0; i < 5; i++)
             {
-                short *pdata = data + i * 4;
-                // 计时器开始
-                gettimeofday(&start, NULL);
 #if (DISP_METHOD == 1)
                 // Method 1: 直接显示框
+                short *pdata = data + i * 4;
                 // 定义矩形框
                 cv::Rect rect(*pdata, *(pdata + 1), *(pdata + 2) - *pdata, *(pdata + 3) - *(pdata + 1));
                 // 绘制框
@@ -99,6 +126,7 @@ int main()
 #else
 #if (DISP_METHOD == 2)
                 // Method 2: 画圆
+                short *pdata = data + i * 4;
                 // 获取框的中心点
                 short cx = (*pdata + *(pdata + 2)) / 2;
                 short cy = (*(pdata + 1) + *(pdata + 3)) / 2;
@@ -117,11 +145,6 @@ int main()
                 {
                     // Mat在内存空间中连续，可用快速算法
                     // 其实不连续也可以用copy()函数，但是这样做没啥实际意义
-
-                    // 将半径转成整数，加速计算
-                    short _radius = cicle_radius[count_frame];
-
-                    // int numberOfPixels = image.rows * image.cols * image.channels();
                     uchar *img_ptr = reinterpret_cast<uchar *>(image.data);
                     // 使用register变量，极限加速
                     for (register short xi = 0; xi < image.rows; xi++)
@@ -177,21 +200,24 @@ int main()
                         }
                     }
                 }
-                gettimeofday(&end, NULL);
-                timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
-                // 给出了时间开销下限，防止计算用时除以0报错浮点数例外
-                timeuse = MAX(timeuse, 1 >> 10);
-                break;
+                // 绘制人头顶上的数字
+                cv::putText(image, "4", cv::Point(cicle_center[count_frame][1], cicle_center[count_frame][0] - cicle_radius[count_frame] + (cicle_radius[count_frame] >> 2)), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(0, 255, 0), 2);
 #endif
 #endif
 #endif
-                // 计时器结束
-                gettimeofday(&end, NULL);
-                timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
-                // 给出了时间开销下限，防止计算用时除以0报错浮点数例外
-                timeuse = MAX(timeuse, 1025);
-                //timeuse = MAX(timeuse, 1);
             }
+#if FRAME_NUM_DISP
+            // 显示左上角的帧数
+            char text_t[16];
+            sprintf(text_t, "Frame %d", count_frame);
+            cv::putText(image, text_t, cv::Point(50, 50), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(255, 255, 255), 2);
+            cv::putText(image, text_t, cv::Point(50, 50), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(0, 255, 0), 1);
+#endif
+            // 计时器结束
+            gettimeofday(&end, NULL);
+            timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
+            // 给出了时间开销下限，防止计算用时除以0报错浮点数例外
+            timeuse = MAX(timeuse, (1 << 10) + 1);
 #if (!SAVE_VIDEO) or DISPLAY_VIDEO
             // 只有在不保存视频的情况下才判断是否显示视频，否则强制显示
             imshow(WINDOW_TITLE, image);
