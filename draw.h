@@ -1,7 +1,6 @@
 #ifndef DRAW_H
 #define DRAW_H
 
-#include <stdio.h>
 #include <math.h>
 
 // 定义欧式距离公式，返回值默认double类型。
@@ -12,36 +11,11 @@
 int readData(short int *data, FILE *fp);
 void StatusBar(int count_frame, int timeuse);
 
-int readData(short int *data, FILE *fp)
-{
-    int flag = 0;
-    if (flag = fread(data, sizeof(short int), 20, fp) != 0)
-    {
-        // 读二进制数据成功
-    }
-    else
-    {
-        printf("Warning: No more data.\n");
-        // 没有数据的话，用前一帧的数据来填充
-        memcpy(data, data - 20, 20 * sizeof(short int));
-    }
+int DataPerpare(FILE *fp);
+int getCircle();
+int smoothCircle();
 
-    return flag;
-}
-
-void StatusBar(int count_frame, int timeuse)
-{
-    if (!(count_frame % PRINT_INTERVAL))
-    {
-        printf("Processing %5.2f\%, %4d/%4d at %dfps[",
-               (100 * (float)count_frame / TOTAL_NUM_FRAME), count_frame, TOTAL_NUM_FRAME, 1000000 * count_frame / timeuse);
-        for (int _t = 0; _t++ < (40 * (float)count_frame / TOTAL_NUM_FRAME);)
-            printf("=");
-        printf(">");
-        for (int _t = 0; _t++ < 39 - (40 * (float)count_frame / TOTAL_NUM_FRAME);)
-            printf(" ");
-        printf("]\n");
-    }
-}
+short getCurrentFrame(short count_frame, short **_cicle_center);
+void getTextPosition(short count_frame, short *_text_x, short *_text_y);
 
 #endif

@@ -1,5 +1,5 @@
-g++ draw.cpp -o draw `pkg-config --cflags --libs opencv4`
-./draw
+g++ main.cpp draw.c -o main `pkg-config --cflags --libs opencv4`
+./main
 # 视频的二次封装压缩
 rm final.mp4
 ffmpeg -i output.mp4 -vcodec libx265 -b:v 2000k final.mp4

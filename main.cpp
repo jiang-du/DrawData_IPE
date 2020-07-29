@@ -12,105 +12,19 @@ int main()
     // ------ 变量初始化 ------
     const char *filename = FILENAME;
     const char *videoname = VIDEONAME;
-    FILE *fp = fopen(filename, "rb");
-    short int *data;
-    short int database[TOTAL_NUM_FRAME][20];
-    struct timeval start, end;
-    int timeuse = -1;
 
     // ------ 读数据 ------
-    // 计时器开始
-    gettimeofday(&start, NULL);
-    // 预读取所有数据
-    for (int i = 0; i < TOTAL_NUM_FRAME;)
-        readData(database[i++], fp);
-    // 计时器暂停
-    gettimeofday(&end, NULL);
-    timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
-    printf("Data read at %d us.\n", timeuse);
+    FILE *fp = fopen(filename, "rb");
+    DataPerpare(fp);
+    fclose(fp);
 
 #if (DISP_METHOD == 3)
-    // ------ 求解圆的中心点和半径 ------
-    short cicle_center[TOTAL_NUM_FRAME][2];
-    short cicle_radius[TOTAL_NUM_FRAME];
-    short text_x[TOTAL_NUM_FRAME], text_y[TOTAL_NUM_FRAME];
-    // 计时器开始
-    gettimeofday(&start, NULL);
-    for (int i = 0; i < TOTAL_NUM_FRAME;)
-    {
-        // 取第几个演员的坐标
-        short *pdata = database[i] + 4*(ACTOR_NUM - 1);
-        // 获取框的中心点；使用移位运算极限加速
-        cicle_center[i][1] = (*pdata + *(pdata + 2)) >> 1;       // 水平方向
-        cicle_center[i][0] = (*(pdata + 1) + *(pdata + 3)) >> 1; // 竖直方向
-        // 获取圆的半径，并量化为整数
-        cicle_radius[i++] = (short)Eclidian(*(pdata + 2) - *pdata, *(pdata + 3) - *(pdata + 1)) >> 1;
-    }
-    // 计时器暂停
-    gettimeofday(&end, NULL);
-    timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
-    printf("Calculate radius at %d us.\n", timeuse);
-
-    // ------ 平滑操作 ------
-    // 计时器开始
-    gettimeofday(&start, NULL);
-    for (short i = 0; ++i < TOTAL_NUM_FRAME;)
-    {
-        // 对半径的容差，注意变大和变小是分别处理的
-        short _diff = cicle_radius[i] - cicle_radius[i - 1];
-        // 半径最多增加多少
-        short difference = cicle_radius[i - 1] >> 4; // 最多允许比上一帧增加1/16
-        if (_diff > difference)
-            cicle_radius[i] = cicle_radius[i - 1] + difference;
-        else
-        {
-            // 半径最多减少多少(注意要用负的)
-            difference = -(cicle_radius[i - 1] >> 5); // 最多允许比上一帧减少1/32
-            if (_diff < difference)
-                cicle_radius[i] = cicle_radius[i - 1] + difference;
-        }
-        // 对圆心位置的容差
-        // 竖直方向平移量
-        difference = 3;
-        if (L1_norm(cicle_center[i][0], cicle_center[i - 1][0]) > difference)
-            cicle_center[i][0] = cicle_center[i - 1][0] + ((cicle_center[i][0] > cicle_center[i - 1][0]) ? difference : (0 - difference));
-        // 水平方向平移量，因为体操运动员运动速度快所以应该设置大一点
-        difference = 20;
-        if (L1_norm(cicle_center[i][1], cicle_center[i - 1][1]) > difference)
-            cicle_center[i][1] = cicle_center[i - 1][1] + ((cicle_center[i][1] > cicle_center[i - 1][1]) ? difference : (0 - difference));
-
-        // 提前获取运动员编号的文字显示位置初始值
-        text_x[i] = cicle_center[i][1]; // 水平方向
-        // 竖直方向稍微比圆的顶部向下一点点
-        text_y[i] = cicle_center[i][0] - cicle_radius[i] + (cicle_radius[i] >> 2);
-    }
-    // 对文字位置的平滑操作，设置关键帧的距离smooth_d
-    short smooth_d = 15;
-    // 水平方向
-    for (short i = 1; ++i < (TOTAL_NUM_FRAME / smooth_d);)
-    {
-        // 代入一次方程拟合
-        float gradient = (float)(text_x[smooth_d * i] - text_x[smooth_d * i - smooth_d]) / smooth_d;
-        for (register short j = -smooth_d; ++j < 0;)
-            text_x[smooth_d * i + j] = text_x[smooth_d * i] + (short int)(j * gradient);
-    }
-    // 竖直方向
-    smooth_d = 30;
-    for (short i = 1; ++i < (TOTAL_NUM_FRAME / smooth_d);)
-    {
-        float gradient = (float)(text_y[smooth_d * i] - text_y[smooth_d * i - smooth_d]) / smooth_d;
-        for (register short j = -smooth_d; ++j < 0;)
-            text_y[smooth_d * i + j] = text_y[smooth_d * i] + (short int)(j * gradient);
-    }
-    // 计时器暂停
-    gettimeofday(&end, NULL);
-    timeuse = 1000000 * (end.tv_sec - start.tv_sec) + end.tv_usec - start.tv_usec;
-    printf("Smooth at %d us.\n", timeuse);
+    getCircle();
+    smoothCircle();
 #endif
 
     cv::Mat image;
     cv::VideoCapture capture;
-
     // ------ 打开视频文件 ------
     capture.open(videoname);
 #if SAVE_VIDEO
@@ -123,14 +37,14 @@ int main()
 #endif
     if (capture.isOpened())
     {
+        // 计时器专用变量
+        struct timeval start, end;
+        int timeuse = -1;
         // 计时器开始
         gettimeofday(&start, NULL);
-        for (int count_frame = 0; count_frame < TOTAL_NUM_FRAME;)
+        for (short count_frame = 0; count_frame < TOTAL_NUM_FRAME;)
         {
             capture >> image;
-            // 导入当前的坐标
-            data = database[count_frame];
-            // 读到的坐标是(x1,y1,x2,y2)格式
             if (image.empty())
             {
                 fclose(fp);
@@ -138,6 +52,9 @@ int main()
                 break;
             }
 #if (DISP_METHOD == 1)
+            // 导入当前的坐标
+            data = database[count_frame];
+            // 读到的坐标是(x1,y1,x2,y2)格式
             for (int i = 0; i < 5; i++)
             {
                 // Method 1: 直接显示框
@@ -150,6 +67,9 @@ int main()
             }
 #else
 #if (DISP_METHOD == 2)
+            // 导入当前的坐标
+            data = database[count_frame];
+            // 读到的坐标是(x1,y1,x2,y2)格式
             for (int i = 0; i < 5; i++)
             {
                 // Method 2: 画圆
@@ -165,6 +85,8 @@ int main()
 #if (DISP_METHOD == 3)
             // Method 3: Attention
             // 对图像进行逐像素处理
+            short *cicle_center;
+            short cicle_radius = getCurrentFrame(count_frame, &cicle_center);
             if (image.isContinuous())
             {
                 // Mat在内存空间中连续，可用快速算法
@@ -173,16 +95,16 @@ int main()
                 // 使用register变量，极限加速
                 for (register short xi = 0; xi < image.rows; xi++)
                 {
-                    if (L1_norm(xi, cicle_center[count_frame][0]) < cicle_radius[count_frame])
+                    if (L1_norm(xi, cicle_center[0]) < cicle_radius)
                     {
                         for (register short yi = 0; yi < image.cols; yi++)
                         {
                             // 判断是否在圆的外切矩形框内
-                            if (L1_norm(yi, cicle_center[count_frame][1]) < cicle_radius[count_frame])
+                            if (L1_norm(yi, cicle_center[1]) < cicle_radius)
                             {
                                 // 设置倍率
-                                float dist = Eclidian(xi - cicle_center[count_frame][0], yi - cicle_center[count_frame][1]);
-                                float rate = MIN(3.5 - 3 * MIN(dist / cicle_radius[count_frame], 1), 1);
+                                float dist = Eclidian(xi - cicle_center[0], yi - cicle_center[1]);
+                                float rate = MIN(3.5 - 3 * MIN(dist / cicle_radius, 1), 1);
                                 // 对3个channel写入内存地址
                                 for (register uchar _c = 0; _c++ < 3;)
                                     // 赋值运算右边执行之后左边的++返回的是加之前的结果
@@ -215,8 +137,8 @@ int main()
                     for (int yi = 0; yi < image.cols; ++yi)
                     {
                         // 设置倍率
-                        float dist = Eclidian(xi - cicle_center[count_frame][0], yi - cicle_center[count_frame][0]);
-                        float rate = MIN(3.5 - 3 * MIN(dist / cicle_radius[count_frame], 1), 1);
+                        float dist = Eclidian(xi - cicle_center[0], yi - cicle_center[0]);
+                        float rate = MIN(3.5 - 3 * MIN(dist / cicle_radius, 1), 1);
                         // 对内存地址的数据直接进行修改
                         for (int _channel = 0; _channel < 3; ++_channel)
                             // BGR
@@ -225,10 +147,12 @@ int main()
                 }
             }
             // 绘制人头顶上的数字
+            short text_x, text_y;
+            getTextPosition(count_frame, &text_x, &text_y);
             char text_n[2];
             sprintf(text_n, "%d", ACTOR_NUM);
-            cv::putText(image, text_n, cv::Point(text_x[count_frame], text_y[count_frame]), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(255, 255, 255), 2);
-            cv::putText(image, text_n, cv::Point(text_x[count_frame], text_y[count_frame]), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(0, 255, 0), 1);
+            cv::putText(image, text_n, cv::Point(text_x, text_y), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(255, 255, 255), 2);
+            cv::putText(image, text_n, cv::Point(text_x, text_y), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(0, 255, 0), 1);
 #endif
 #endif
 #endif
