@@ -31,17 +31,18 @@ int main()
 
 #if (DISP_METHOD == 3)
     // ------ 求解圆的中心点和半径 ------
-    short int cicle_center[TOTAL_NUM_FRAME][2];
+    short cicle_center[TOTAL_NUM_FRAME][2];
     short cicle_radius[TOTAL_NUM_FRAME];
+    short text_x[TOTAL_NUM_FRAME], text_y[TOTAL_NUM_FRAME];
     // 计时器开始
     gettimeofday(&start, NULL);
     for (int i = 0; i < TOTAL_NUM_FRAME;)
     {
-        // 取第3个演员的坐标
-        short *pdata = database[i] + 3;
+        // 取第几个演员的坐标
+        short *pdata = database[i] + 4*(ACTOR_NUM - 1);
         // 获取框的中心点；使用移位运算极限加速
-        cicle_center[i][0] = (*pdata + *(pdata + 2)) >> 1;       //x
-        cicle_center[i][1] = (*(pdata + 1) + *(pdata + 3)) >> 1; //y
+        cicle_center[i][1] = (*pdata + *(pdata + 2)) >> 1;       // 水平方向
+        cicle_center[i][0] = (*(pdata + 1) + *(pdata + 3)) >> 1; // 竖直方向
         // 获取圆的半径，并量化为整数
         cicle_radius[i++] = (short)Eclidian(*(pdata + 2) - *pdata, *(pdata + 3) - *(pdata + 1)) >> 1;
     }
@@ -77,6 +78,29 @@ int main()
         difference = 20;
         if (L1_norm(cicle_center[i][1], cicle_center[i - 1][1]) > difference)
             cicle_center[i][1] = cicle_center[i - 1][1] + ((cicle_center[i][1] > cicle_center[i - 1][1]) ? difference : (0 - difference));
+
+        // 提前获取运动员编号的文字显示位置初始值
+        text_x[i] = cicle_center[i][1]; // 水平方向
+        // 竖直方向稍微比圆的顶部向下一点点
+        text_y[i] = cicle_center[i][0] - cicle_radius[i] + (cicle_radius[i] >> 2);
+    }
+    // 对文字位置的平滑操作，设置关键帧的距离smooth_d
+    short smooth_d = 15;
+    // 水平方向
+    for (short i = 1; ++i < (TOTAL_NUM_FRAME / smooth_d);)
+    {
+        // 代入一次方程拟合
+        float gradient = (float)(text_x[smooth_d * i] - text_x[smooth_d * i - smooth_d]) / smooth_d;
+        for (register short j = -smooth_d; ++j < 0;)
+            text_x[smooth_d * i + j] = text_x[smooth_d * i] + (short int)(j * gradient);
+    }
+    // 竖直方向
+    smooth_d = 30;
+    for (short i = 1; ++i < (TOTAL_NUM_FRAME / smooth_d);)
+    {
+        float gradient = (float)(text_y[smooth_d * i] - text_y[smooth_d * i - smooth_d]) / smooth_d;
+        for (register short j = -smooth_d; ++j < 0;)
+            text_y[smooth_d * i + j] = text_y[smooth_d * i] + (short int)(j * gradient);
     }
     // 计时器暂停
     gettimeofday(&end, NULL);
@@ -113,9 +137,9 @@ int main()
                 cv::waitKey(0);
                 break;
             }
+#if (DISP_METHOD == 1)
             for (int i = 0; i < 5; i++)
             {
-#if (DISP_METHOD == 1)
                 // Method 1: 直接显示框
                 short *pdata = data + i * 4;
                 // 定义矩形框
@@ -123,8 +147,11 @@ int main()
                 // 绘制框
                 cv::rectangle(image, rect, cv::Scalar(64 + i * 48, 128 + i * 32, 192 - i * 48, (double)0.5), 5, 8, 0);
                 // image.at<u_char>(0,0,0) = 1;
+            }
 #else
 #if (DISP_METHOD == 2)
+            for (int i = 0; i < 5; i++)
+            {
                 // Method 2: 画圆
                 short *pdata = data + i * 4;
                 // 获取框的中心点
@@ -133,79 +160,78 @@ int main()
                 // 获取圆的半径
                 double radius = 0.5 * Eclidian(*(pdata + 2) - *pdata, *(pdata + 3) - *(pdata + 1));
                 cv::circle(image, cv::Point(cx, cy), radius, cv::Scalar(0, 255, 0), 3);
+            }
 #else
 #if (DISP_METHOD == 3)
-
-                // Method 3: Attention
-                if ((i - 3) != 0)
-                    // 选择需要关注的person ID
-                    continue;
-                // 对图像进行逐像素处理
-                if (image.isContinuous())
+            // Method 3: Attention
+            // 对图像进行逐像素处理
+            if (image.isContinuous())
+            {
+                // Mat在内存空间中连续，可用快速算法
+                // 其实不连续也可以用copy()函数，但是这样做没啥实际意义
+                uchar *img_ptr = reinterpret_cast<uchar *>(image.data);
+                // 使用register变量，极限加速
+                for (register short xi = 0; xi < image.rows; xi++)
                 {
-                    // Mat在内存空间中连续，可用快速算法
-                    // 其实不连续也可以用copy()函数，但是这样做没啥实际意义
-                    uchar *img_ptr = reinterpret_cast<uchar *>(image.data);
-                    // 使用register变量，极限加速
-                    for (register short xi = 0; xi < image.rows; xi++)
+                    if (L1_norm(xi, cicle_center[count_frame][0]) < cicle_radius[count_frame])
                     {
-                        if (L1_norm(xi, cicle_center[count_frame][0]) < cicle_radius[count_frame])
+                        for (register short yi = 0; yi < image.cols; yi++)
                         {
-                            for (register short yi = 0; yi < image.cols; yi++)
+                            // 判断是否在圆的外切矩形框内
+                            if (L1_norm(yi, cicle_center[count_frame][1]) < cicle_radius[count_frame])
                             {
-                                // 判断是否在圆的外切矩形框内
-                                if (L1_norm(yi, cicle_center[count_frame][1]) < cicle_radius[count_frame])
-                                {
-                                    // 设置倍率
-                                    float dist = Eclidian(xi - cicle_center[count_frame][0], yi - cicle_center[count_frame][1]);
-                                    float rate = MIN(3.5 - 3 * MIN(dist / cicle_radius[count_frame], 1), 1);
-                                    // 对3个channel写入内存地址
-                                    for (register uchar _c = 0; _c++ < 3;)
-                                        // 赋值运算右边执行之后左边的++返回的是加之前的结果
-                                        *(img_ptr++) = (uchar)(rate * (float)(*img_ptr));
-                                }
-                                else
-                                {
-                                    for (register uchar _c = 0; _c++ < 3;)
-                                        // 使用移位运算直接二进制操作
-                                        *(img_ptr++) = (*(img_ptr)) >> 1;
-                                }
+                                // 设置倍率
+                                float dist = Eclidian(xi - cicle_center[count_frame][0], yi - cicle_center[count_frame][1]);
+                                float rate = MIN(3.5 - 3 * MIN(dist / cicle_radius[count_frame], 1), 1);
+                                // 对3个channel写入内存地址
+                                for (register uchar _c = 0; _c++ < 3;)
+                                    // 赋值运算右边执行之后左边的++返回的是加之前的结果
+                                    *(img_ptr++) = (uchar)(rate * (float)(*img_ptr));
+                            }
+                            else
+                            {
+                                for (register uchar _c = 0; _c++ < 3;)
+                                    // 使用移位运算直接二进制操作
+                                    *(img_ptr++) = (*img_ptr) >> 1;
                             }
                         }
-                        else
-                            // 剩下的都是背景
-                            for (register int yi = 0; yi++ < image.cols;)
-                                for (register uchar _c = 0; _c++ < 3;)
-                                    *(img_ptr++) = (*(img_ptr)) >> 1;
                     }
+                    else
+                        // 剩下的都是背景
+                        for (register int yi = 0; yi++ < image.cols;)
+                            for (register uchar _c = 0; _c++ < 3;)
+                                *(img_ptr++) = (*img_ptr) >> 1;
                 }
-                else
-                {
-                    printf("Warning: You are using a slow algorithm.\n");
-                    // 传统方法：遍历所有像素，并设置像素值
-                    // 时间：快速算法约18ms一张图，传统方法大约63ms
-                    for (int xi = 0; xi < image.rows;)
-                    {
-                        //获取第i行首像素指针
-                        cv::Vec3b *p = image.ptr<cv::Vec3b>(xi++);
-                        for (int yi = 0; yi < image.cols; ++yi)
-                        {
-                            // 设置倍率
-                            float dist = Eclidian(xi - cicle_center[count_frame][0], yi - cicle_center[count_frame][0]);
-                            float rate = MIN(3.5 - 3 * MIN(dist / cicle_radius[count_frame], 1), 1);
-                            // 对内存地址的数据直接进行修改
-                            for (int _channel = 0; _channel < 3; ++_channel)
-                                // BGR
-                                p[yi][_channel] = (unsigned char)(rate * (float)p[yi][_channel]);
-                        }
-                    }
-                }
-                // 绘制人头顶上的数字
-                cv::putText(image, "4", cv::Point(cicle_center[count_frame][1], cicle_center[count_frame][0] - cicle_radius[count_frame] + (cicle_radius[count_frame] >> 2)), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(0, 255, 0), 2);
-#endif
-#endif
-#endif
             }
+            else
+            {
+                printf("Warning: You are using a slow algorithm.\n");
+                // 传统方法：遍历所有像素，并设置像素值
+                // 时间：快速算法约18ms一张图，传统方法大约63ms
+                for (int xi = 0; xi < image.rows;)
+                {
+                    //获取第i行首像素指针
+                    cv::Vec3b *p = image.ptr<cv::Vec3b>(xi++);
+                    for (int yi = 0; yi < image.cols; ++yi)
+                    {
+                        // 设置倍率
+                        float dist = Eclidian(xi - cicle_center[count_frame][0], yi - cicle_center[count_frame][0]);
+                        float rate = MIN(3.5 - 3 * MIN(dist / cicle_radius[count_frame], 1), 1);
+                        // 对内存地址的数据直接进行修改
+                        for (int _channel = 0; _channel < 3; ++_channel)
+                            // BGR
+                            p[yi][_channel] = (unsigned char)(rate * (float)p[yi][_channel]);
+                    }
+                }
+            }
+            // 绘制人头顶上的数字
+            char text_n[2];
+            sprintf(text_n, "%d", ACTOR_NUM);
+            cv::putText(image, text_n, cv::Point(text_x[count_frame], text_y[count_frame]), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(255, 255, 255), 2);
+            cv::putText(image, text_n, cv::Point(text_x[count_frame], text_y[count_frame]), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(0, 255, 0), 1);
+#endif
+#endif
+#endif
 #if FRAME_NUM_DISP
             // 显示左上角的帧数
             char text_t[16];
