@@ -6,11 +6,15 @@
 
 - OpenCV 4.4
 
+- FFmpeg 4.2.4
+
 首先需要从源码编译并配置opencv，如果不会配置环境，请自己去谷歌搜索教程，也可以参考[相关博客(点击传送门直达)](https://www.jianshu.com/p/26dd452a362e)，如果opencv源码压缩包下载太慢，请使用[码云镜像下载](https://gitee.com/jiangdu/opencv/repository/archive/4.4.0?format=tar.gz)。
 
 ## 使用说明
 
 1. 提前准备好`poseAdd2Id.json`放在该目录下。
+
+    把音乐文件命名为`out.m4a`放在该目录下。
 
 2. 第一次运行时，需要先执行数据格式转换
 
@@ -36,13 +40,35 @@
     #define ACTOR_NUM 1 // 演员编号：范围1-5
     ```
 
+    如果电脑没有配备支持Nvidia CUDA的显卡，还需要修改：
+
+    ```sh
+    vim config.h
+    ```
+
+    把其中的`h264_nvenc`改为`libx264`或`libx265`(根据需要的编码格式)
+
 4. 编译运行
 
     ```sh
     ./make.sh
     ```
 
+    最终得到的视频存储在`./final.mp4`
+
 ## 功能介绍
+
+2020.7.30更新：
+
+1. 支持对不同运动员使用自定义的预设颜色进行标注。
+
+2. 平滑效果的处理可推广到所有运动员，全部的数据统一存储并提供指针函数方便调用。
+
+3. 用户可自由选择对全部运动员的标签进行显示，或重点关注单个运动员，叠加光场的视频特效，并且在这个过程中其他人的标签被缩小，被关注者的标签放大并加入了轮廓特效。
+
+4. 视频制作完成后自动与音频文件合成并转H.264编码，默认启用CUDA进行GPU加速。
+
+5. 修复了一个细节BUG，它曾经因为指针范围溢出导致内存地址泄漏，表现形式为1号运动员的标签文字飘到左上角。
 
 2020.7.29更新：
 
@@ -56,7 +82,7 @@
 
 设左关键帧的数值为$y_L$，右关键帧的数值为$y_R$，关键帧间隔为$d$，可以推导出抛物线的方程为：
 
-![](data:image/png;base64,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)
+$$y=ax^2+(\frac{y_R-y_L}{d}-da)x+y_L$$
 
 其中a为待定系数，d在本程序中水平方向取$d=15$，竖直方向取$d=30$。
 
@@ -107,7 +133,7 @@ TODO:
     - [x] 基于OpenCV和C语言的单线程CPU版
     - [x] 支持是否导出视频以及格式选择(H.264编码默认使用CPU多线程)
     - [ ] 调用C语言和python的接口，实现直接读json文件
-    - [ ] 使用OpenCL或CUDA对视频处理进行速度优化
+    - [X] 使用CUDA对视频与音频合成进行硬件加速(需要Nvidia GPU支持)
 
 # LICENSE
 

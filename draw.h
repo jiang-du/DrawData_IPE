@@ -15,7 +15,8 @@ int DataPerpare(FILE *fp);
 int getCircle();
 int smoothCircle();
 
-short getCurrentFrame(short count_frame, short **_cicle_center);
-void getTextPosition(short count_frame, short *_text_x, short *_text_y);
+short getCurrentFrame(short count_frame, short **_cicle_center, char idx_actor = 0);
+void getTextPosition(short count_frame, short *_text_x, short *_text_y, char idx_actor = 0);
+void getTextColor(double* color_val, char idx_actor = 0);
 
 #endif

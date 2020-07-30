@@ -5,11 +5,14 @@
 *.bin
 bin/*
 
-# video files
+# video / image / music
 *.mp4
 *.avi
 *.jpg
 *.png
+*.mp3
+*.wav
+*.m4a
 
 # windows
 Thumbs.db

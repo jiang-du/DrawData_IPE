@@ -18,7 +18,8 @@ int main()
     DataPerpare(fp);
     fclose(fp);
 
-#if (DISP_METHOD == 3)
+#if (DISP_METHOD != 1)
+    // 对数据的预处理
     getCircle();
     smoothCircle();
 #endif
@@ -67,8 +68,9 @@ int main()
             }
 #else
 #if (DISP_METHOD == 2)
-            // 导入当前的坐标
-            data = database[count_frame];
+            // 获取当前的坐标
+            short *cicle_center;
+            short cicle_radius = getCurrentFrame(count_frame, &cicle_center);
             // 读到的坐标是(x1,y1,x2,y2)格式
             for (int i = 0; i < 5; i++)
             {
@@ -86,7 +88,7 @@ int main()
             // Method 3: Attention
             // 对图像进行逐像素处理
             short *cicle_center;
-            short cicle_radius = getCurrentFrame(count_frame, &cicle_center);
+            short cicle_radius = getCurrentFrame(count_frame, &cicle_center, ACTOR_NUM - 1) + 20;
             if (image.isContinuous())
             {
                 // Mat在内存空间中连续，可用快速算法
@@ -146,15 +148,32 @@ int main()
                     }
                 }
             }
-            // 绘制人头顶上的数字
+#endif
+#endif
+#endif
+// 绘制人头顶上的数字
+#if DISP_ALL_LABEL
             short text_x, text_y;
-            getTextPosition(count_frame, &text_x, &text_y);
-            char text_n[2];
-            sprintf(text_n, "%d", ACTOR_NUM);
-            cv::putText(image, text_n, cv::Point(text_x, text_y), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(255, 255, 255), 2);
-            cv::putText(image, text_n, cv::Point(text_x, text_y), cv::FONT_HERSHEY_COMPLEX, 1, cv::Scalar(0, 255, 0), 1);
+            cv::Scalar color_text(0);
+            for (char idx_actor = 0; idx_actor < TOTAL_PERSON;)
+            {
+                getTextColor(color_text.val, idx_actor);
+                getTextPosition(count_frame, &text_x, &text_y, idx_actor);
+                char text_n[2];
+                // 这地方注意idx_actor应该先++再返回值给text_n，因为显示的数字范围编号是从1开始的，而数组存储是从0开始
+                sprintf(text_n, "%d", ++idx_actor);
+#if (DISP_METHOD == 3)
+                if (idx_actor == ACTOR_NUM)
+                {
+                    cv::putText(image, text_n, cv::Point(text_x, text_y), cv::FONT_HERSHEY_SIMPLEX, 1.5, cv::Scalar(255, 255, 255), 5);
+                    cv::putText(image, text_n, cv::Point(text_x, text_y), cv::FONT_HERSHEY_SIMPLEX, 1.5, color_text, 3);
+                }
+                else
+                    cv::putText(image, text_n, cv::Point(text_x, text_y), cv::FONT_HERSHEY_SIMPLEX, 0.9, color_text, 2.4);
+#else
+                cv::putText(image, text_n, cv::Point(text_x, text_y), cv::FONT_HERSHEY_SIMPLEX, 1.2, color_text, 3);
 #endif
-#endif
+            }
 #endif
 #if FRAME_NUM_DISP
             // 显示左上角的帧数

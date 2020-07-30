@@ -8,12 +8,14 @@
 #define DISPLAY_VIDEO 1 // 设置成0就不显示，默认为1
 #endif
 #define TOTAL_NUM_FRAME 1097
+#define TOTAL_PERSON 5
 #define DISP_METHOD 3
 #if (DISP_METHOD==3)
 #define ACTOR_NUM 1 // 演员编号：范围1-5
 #endif
-// 是否显示左上角的frame编号
-#define FRAME_NUM_DISP 1
+#define DISP_ALL_LABEL 1
+// 是否显示左上角的frame编号，推荐在debug状态下使用
+#define FRAME_NUM_DISP 0
 // 设置多少个frame打印一次
 #define PRINT_INTERVAL 30
 // 编码格式选择X264更有利于视频质量好，但是速度慢一些
