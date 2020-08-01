@@ -24,5 +24,7 @@ Desktop.ini
 log/*
 
 # c/c++ made files
+*.o
+*.so
 main
 draw
